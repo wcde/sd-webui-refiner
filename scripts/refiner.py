@@ -54,6 +54,7 @@ class Refiner(scripts.Script):
         self.model = get_obj_from_str(OPENAIUNETWRAPPER)(
             self.model, compile_model=False
         ).eval()
+        self.model.half()
         self.model.train = disabled_train
         dtype = next(self.model.diffusion_model.parameters()).dtype
         self.model.diffusion_model.dtype = dtype
@@ -135,19 +136,16 @@ class Refiner(scripts.Script):
                 params.text_cond['crossattn'] = params.text_cond['crossattn'][:, :, -1280:]
                 params.text_uncond['crossattn'] = params.text_uncond['crossattn'][:, :, -1280:]
                 if not self.swapped:
-                    p.sd_model.model.cpu()
-                    torch.cuda.empty_cache()
-                    self.base = p.sd_model.model
-                    p.sd_model.model = self.model
-                    p.sd_model.model.cuda()
-                    self.swapped = True
+                    with devices.autocast(), torch.inference_mode():
+                        self.base = p.sd_model.model.cpu()
+                        devices.torch_gc()
+                        p.sd_model.model = self.model.to('cuda', torch.float16)
+                        self.swapped = True
         
         def denoised_callback(params: script_callbacks.CFGDenoiserParams):
             if params.sampling_step == params.total_sampling_steps - 2:
                 self.model.cpu()
-                torch.cuda.empty_cache()
-                p.sd_model.model = self.base
-                p.sd_model.model.cuda()
+                p.sd_model.model = self.base.cuda()
                 del self.base
                 self.base = None
                 self.swapped = False
