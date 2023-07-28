@@ -1,23 +1,15 @@
 from pathlib import Path
-import time
 import torch
-from modules import scripts, shared, processing, sd_samplers, script_callbacks
-from modules import devices, prompt_parser, sd_models, sd_models_config, sd_models_xl
+from modules import scripts, script_callbacks, devices, sd_models, sd_models_config
 import gradio as gr
-from modules.sd_hijack import StableDiffusionModelHijack
-
-import sgm.models.diffusion as diffusion
-from sgm.modules import UNCONDITIONAL_CONFIG
 import sgm.modules.diffusionmodules.denoiser_scaling
 import sgm.modules.diffusionmodules.discretizer
 from safetensors.torch import load_file
 from sgm.modules.diffusionmodules.wrappers import OPENAIUNETWRAPPER
 from sgm.util import (
-    default,
     disabled_train,
     get_obj_from_str,
     instantiate_from_config,
-    log_txt_as_img,
 )
 
 def safe_import(import_name: str, pkg_name: str | None = None):
