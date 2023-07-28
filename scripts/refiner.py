@@ -4,6 +4,7 @@ import torch
 from modules import scripts, shared, processing, sd_samplers, script_callbacks
 from modules import devices, prompt_parser, sd_models, sd_models_config, sd_models_xl
 import gradio as gr
+from modules.sd_hijack import StableDiffusionModelHijack
 
 import sgm.models.diffusion as diffusion
 from sgm.modules import UNCONDITIONAL_CONFIG
@@ -106,15 +107,14 @@ class Refiner(scripts.Script):
             with gr.Row():
                 checkpoint = gr.Dropdown(choices=['None', *sd_models.checkpoints_list.keys()], label='Model', value=self.config.get('checkpoint', 'None'))
                 steps = gr.Slider(minimum=0, maximum=35, step=1, label='Steps', value=self.config.get('steps', 10))
-            keep_in_gpu = gr.Checkbox(label='Keep Refiner in GPU (not recommended, requires 24 Gb VRAM)', value=self.config.get('keep_in_gpu', False))
             
-        ui = [enable, checkpoint, steps, keep_in_gpu]
+        ui = [enable, checkpoint, steps]
         for elem in ui:
             setattr(elem, "do_not_save_to_config", True)
         return ui
     
     
-    def process(self, p, enable, checkpoint, steps, keep_in_gpu):
+    def process(self, p, enable, checkpoint, steps):
         if not enable or checkpoint == 'None':
             script_callbacks.remove_current_script_callbacks()
             self.model = None
@@ -124,18 +124,25 @@ class Refiner(scripts.Script):
         self.config.enable = enable
         self.config.checkpoint = checkpoint
         self.config.steps = steps
-        self.config.keep_in_gpu = keep_in_gpu
         
         def denoiser_callback(params: script_callbacks.CFGDenoiserParams):
+            if params.sampling_step == 0 and self.swapped:
+                p.sd_model.model.cpu()
+                torch.cuda.empty_cache()
+                p.sd_model.model = self.base.cuda()
+                self.swapped = False
+                self.callback_set = False
+                script_callbacks.remove_current_script_callbacks()
+                return
+            
             if params.sampling_step > params.total_sampling_steps - (steps + 2):
                 params.text_cond['vector'] = params.text_cond['vector'][:, :2560]
                 params.text_uncond['vector'] = params.text_uncond['vector'][:, :2560]
                 params.text_cond['crossattn'] = params.text_cond['crossattn'][:, :, -1280:]
                 params.text_uncond['crossattn'] = params.text_uncond['crossattn'][:, :, -1280:]
                 if not self.swapped:
-                    if not self.config.keep_in_gpu:
-                        p.sd_model.model.cpu()
-                        torch.cuda.empty_cache()
+                    p.sd_model.model.cpu()
+                    torch.cuda.empty_cache()
                     self.base = p.sd_model.model
                     p.sd_model.model = self.model.cuda()
                     self.swapped = True
@@ -143,7 +150,6 @@ class Refiner(scripts.Script):
         if not self.callback_set:
             script_callbacks.on_cfg_denoiser(denoiser_callback)
             self.callback_set = True
-        
     
     def postprocess(self, p, processed, *args):
         if self.swapped:
