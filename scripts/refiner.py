@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 import torch
 from modules import scripts, shared, processing, sd_samplers, script_callbacks
 from modules import devices, prompt_parser, sd_models, sd_models_config, sd_models_xl
@@ -132,9 +133,10 @@ class Refiner(scripts.Script):
                 params.text_cond['crossattn'] = params.text_cond['crossattn'][:, :, -1280:]
                 params.text_uncond['crossattn'] = params.text_uncond['crossattn'][:, :, -1280:]
                 if not self.swapped:
-                    self.base = p.sd_model.model
                     if not self.config.keep_in_gpu:
-                        self.base.cpu()
+                        p.sd_model.model.cpu()
+                        torch.cuda.empty_cache()
+                    self.base = p.sd_model.model
                     p.sd_model.model = self.model.cuda()
                     self.swapped = True
         
@@ -146,7 +148,8 @@ class Refiner(scripts.Script):
     def postprocess(self, p, processed, *args):
         if self.swapped:
             if not self.config.keep_in_gpu:
-                self.model.cpu()
+                p.sd_model.model.cpu()
+                torch.cuda.empty_cache()
             p.sd_model.model = self.base.cuda()
             self.swapped = False
             self.callback_set = False
