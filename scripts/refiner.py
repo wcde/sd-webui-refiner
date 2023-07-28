@@ -56,6 +56,23 @@ class Refiner(scripts.Script):
     def show(self, is_img2img):
         return scripts.AlwaysVisible
     
+    def build_model(self):
+        refiner_config = OmegaConf.load(sd_models_config.config_sdxl_refiner).model.params.network_config
+        self.model = instantiate_from_config(refiner_config)
+        self.model = get_obj_from_str(OPENAIUNETWRAPPER)(
+            self.model, compile_model=False
+        ).eval()
+        self.model.train = disabled_train
+        dtype = next(self.model.diffusion_model.parameters()).dtype
+        self.model.diffusion_model.dtype = dtype
+        self.model.conditioning_key = 'crossattn'
+        self.model.cond_stage_key = 'txt'
+        self.model.parameterization = 'v'
+        discretization = sgm.modules.diffusionmodules.discretizer.LegacyDDPMDiscretization()
+        self.model.alphas_cumprod = torch.asarray(discretization.alphas_cumprod, device=devices.device, dtype=dtype)
+        for param in self.model.parameters():
+            param.requires_grad = False
+    
     def load_model(self, model_name):
         ckpt = load_file(sd_models.checkpoints_list[model_name].filename)
         model_type = ''
@@ -75,27 +92,12 @@ class Refiner(scripts.Script):
             return False
         
         print('\nLoading refiner...\n')
-        refiner_config = OmegaConf.load(sd_models_config.config_sdxl_refiner).model.params.network_config
-        self.model = instantiate_from_config(refiner_config)
-        self.model = get_obj_from_str(OPENAIUNETWRAPPER)(
-            self.model, compile_model=False
-        ).eval()
-        self.model.train = disabled_train
-        dtype = next(self.model.diffusion_model.parameters()).dtype
-        self.model.diffusion_model.dtype = dtype
-        self.model.conditioning_key = 'crossattn'
-        self.model.cond_stage_key = 'txt'
-        self.model.parameterization = 'v'
-        discretization = sgm.modules.diffusionmodules.discretizer.LegacyDDPMDiscretization()
-        self.model.alphas_cumprod = torch.asarray(discretization.alphas_cumprod, device=devices.device, dtype=dtype)
-        
-        for param in self.model.parameters():
-            param.requires_grad = False
+        self.build_model()
             
         state_dict = dict()
         for key in ckpt.keys():
             if 'model.diffusion_model' in key:
-                state_dict[key.replace('model.d', 'd')] = ckpt[key]
+                state_dict[key.replace('model.d', 'd')] = ckpt[key].half()
         self.model.load_state_dict(state_dict)
         self.model_name = model_name
         return True
@@ -121,20 +123,16 @@ class Refiner(scripts.Script):
             return
         if self.model == None or self.model_name != checkpoint:
             if not self.load_model(checkpoint): return
+        if self.base != None:
+            p.sd_model.model = self.base
+            p.sd_model.model.cuda()
+            del self.base
+            self.base = None
         self.config.enable = enable
         self.config.checkpoint = checkpoint
         self.config.steps = steps
         
         def denoiser_callback(params: script_callbacks.CFGDenoiserParams):
-            if params.sampling_step == 0 and self.swapped:
-                p.sd_model.model.cpu()
-                torch.cuda.empty_cache()
-                p.sd_model.model = self.base.cuda()
-                self.swapped = False
-                self.callback_set = False
-                script_callbacks.remove_current_script_callbacks()
-                return
-            
             if params.sampling_step > params.total_sampling_steps - (steps + 2):
                 params.text_cond['vector'] = params.text_cond['vector'][:, :2560]
                 params.text_uncond['vector'] = params.text_uncond['vector'][:, :2560]
@@ -144,23 +142,28 @@ class Refiner(scripts.Script):
                     p.sd_model.model.cpu()
                     torch.cuda.empty_cache()
                     self.base = p.sd_model.model
-                    p.sd_model.model = self.model.cuda()
+                    p.sd_model.model = self.model
+                    p.sd_model.model.cuda()
                     self.swapped = True
+        
+        def denoised_callback(params: script_callbacks.CFGDenoiserParams):
+            if params.sampling_step == params.total_sampling_steps - 2:
+                self.model.cpu()
+                torch.cuda.empty_cache()
+                p.sd_model.model = self.base
+                p.sd_model.model.cuda()
+                del self.base
+                self.base = None
+                self.swapped = False
+                self.callback_set = False
         
         if not self.callback_set:
             script_callbacks.on_cfg_denoiser(denoiser_callback)
+            script_callbacks.on_cfg_denoised(denoised_callback)
             self.callback_set = True
     
     def postprocess(self, p, processed, *args):
-        if self.swapped:
-            if not self.config.keep_in_gpu:
-                p.sd_model.model.cpu()
-                torch.cuda.empty_cache()
-            p.sd_model.model = self.base.cuda()
-            self.swapped = False
-            self.callback_set = False
-            script_callbacks.remove_current_script_callbacks()
-            OmegaConf.save(self.config, config_path)
+        script_callbacks.remove_current_script_callbacks()
         
         
         
