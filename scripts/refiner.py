@@ -124,6 +124,7 @@ class Refiner(scripts.Script):
         if self.model == None or self.model_name != checkpoint:
             if not self.load_model(checkpoint): return
         if self.base != None:
+            self.model.cpu()
             p.sd_model.model = self.base
             p.sd_model.model.cuda()
             del self.base
