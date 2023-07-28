@@ -115,13 +115,15 @@ class Refiner(scripts.Script):
             return
         if self.model == None or self.model_name != checkpoint:
             if not self.load_model(checkpoint): return
-        if self.base != None:
+        if self.base != None or self.swapped == True:
             self.model.cpu()
-            p.sd_model.model = self.base
+            p.sd_model.model = self.base or p.sd_model.model
             p.sd_model.model.cuda()
             del self.base
+            script_callbacks.remove_current_script_callbacks()
             self.base = None
             self.swapped = False
+            self.callback_set = True
         self.config.enable = enable
         self.config.checkpoint = checkpoint
         self.config.steps = steps
