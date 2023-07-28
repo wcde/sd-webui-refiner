@@ -129,6 +129,7 @@ class Refiner(scripts.Script):
             p.sd_model.model.cuda()
             del self.base
             self.base = None
+            self.swapped = False
         self.config.enable = enable
         self.config.checkpoint = checkpoint
         self.config.steps = steps
