@@ -135,6 +135,8 @@ class Refiner(scripts.Script):
                 params.text_cond['crossattn'] = params.text_cond['crossattn'][:, :, -1280:]
                 params.text_uncond['crossattn'] = params.text_uncond['crossattn'][:, :, -1280:]
                 if not self.swapped:
+                    for parameter in p.sd_model.model.parameters():
+                        parameter.to('cpu', torch.float16)
                     self.base = p.sd_model.model.to('cpu', torch.float16)
                     devices.torch_gc()
                     p.sd_model.model = self.model.to('cuda', torch.float16)
