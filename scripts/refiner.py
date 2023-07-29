@@ -12,7 +12,7 @@ from sgm.util import (
     instantiate_from_config,
 )
 
-def safe_import(import_name, pkg_name):
+def safe_import(import_name, pkg_name=None):
     try:
         __import__(import_name)
     except Exception:
