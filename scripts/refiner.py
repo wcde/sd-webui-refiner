@@ -98,7 +98,7 @@ class Refiner(scripts.Script):
 
     def ui(self, is_img2img):
         with gr.Accordion(label='Refiner', open=False):
-            enable = gr.Checkbox(label='Enable Refiner', value=self.config.get('enable', False))
+            enable = gr.Checkbox(label='Enable Refiner', value=False)
             with gr.Row():
                 checkpoint = gr.Dropdown(choices=['None', *sd_models.checkpoints_list.keys()], label='Model', value=self.config.get('checkpoint', 'None'))
                 steps = gr.Slider(minimum=0, maximum=35, step=1, label='Steps', value=self.config.get('steps', 10))
