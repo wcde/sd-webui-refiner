@@ -119,7 +119,7 @@ class Refiner(scripts.Script):
         if self.base != None or self.swapped == True or self.callback_set == True:
             self.model.to('cpu', torch.float16)
             p.sd_model.model = self.base or p.sd_model.model
-            p.sd_model.model.to('cuda', torch.float16)
+            p.sd_model.model.to(devices.device, torch.float16)
             script_callbacks.remove_current_script_callbacks()
             self.base = None
             self.swapped = False
@@ -139,13 +139,13 @@ class Refiner(scripts.Script):
                         parameter.to('cpu', torch.float16)
                     self.base = p.sd_model.model.to('cpu', torch.float16)
                     devices.torch_gc()
-                    p.sd_model.model = self.model.to('cuda', torch.float16)
+                    p.sd_model.model = self.model.to(devices.device, torch.float16)
                     self.swapped = True
         
         def denoised_callback(params: script_callbacks.CFGDenoiserParams):
             if params.sampling_step == params.total_sampling_steps - 2:
                 self.model.to('cpu', torch.float16)
-                p.sd_model.model = self.base.to('cuda', torch.float16)
+                p.sd_model.model = self.base.to(devices.device, torch.float16)
                 self.base = None
                 self.swapped = False
                 self.callback_set = False
