@@ -1,10 +1,10 @@
 from pathlib import Path
 import torch
-from modules import scripts, script_callbacks, devices, sd_models, sd_models_config
+from modules import scripts, script_callbacks, devices, sd_models, sd_models_config, shared
 import gradio as gr
 import sgm.modules.diffusionmodules.denoiser_scaling
 import sgm.modules.diffusionmodules.discretizer
-from safetensors.torch import load_file
+from safetensors.torch import load_file, load
 from sgm.modules.diffusionmodules.wrappers import OPENAIUNETWRAPPER
 from sgm.util import (
     disabled_train,
@@ -67,7 +67,10 @@ class Refiner(scripts.Script):
             param.requires_grad = False
     
     def load_model(self, model_name):
-        ckpt = load_file(sd_models.checkpoints_list[model_name].filename)
+        if not shared.opts.disable_mmap_load_safetensors:
+                ckpt = load_file(sd_models.checkpoints_list[model_name].filename)
+        else:
+                ckpt = load(open(sd_models.checkpoints_list[model_name].filename, 'rb').read())
         model_type = ''
         for key in ckpt.keys():
             if 'conditioner' in key: 
