@@ -27,15 +27,12 @@ def safe_import(import_name, pkg_name=None):
         
 
 safe_import('omegaconf')
-from omegaconf import DictConfig, OmegaConf
-config_path = Path(__file__).parent.resolve() / '../config.yaml'
+from omegaconf import OmegaConf
+
 
 class Refiner(scripts.Script):
     def __init__(self):
         super().__init__()
-        if not config_path.exists():
-            open(config_path, 'w').close()
-        self.config: DictConfig = OmegaConf.load(config_path)
         self.callback_set = False
         self.model = None
         self.conditioner = None
@@ -111,8 +108,6 @@ class Refiner(scripts.Script):
                 steps = gr.Slider(minimum=0, maximum=35, step=1, label='Steps', value=self.config.get('steps', 10))
             
         ui = [enable, checkpoint, steps]
-        for elem in ui:
-            setattr(elem, "do_not_save_to_config", True)
         return ui
     
     
