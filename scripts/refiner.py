@@ -108,7 +108,9 @@ class Refiner(scripts.Script):
             enable = gr.Checkbox(label='Enable Refiner', value=False)
             with gr.Row():
                 checkpoint = gr.Dropdown(choices=['None', *sd_models.checkpoints_list.keys()], label='Model', value=self.config.get('checkpoint', 'None'))
-                steps = gr.Slider(minimum=0, maximum=35, step=1, label='Steps', value=self.config.get('steps', 10))
+                steps = gr.Slider(minimum=0, maximum=50, step=1, label='Percent of refiner steps from total sampling steps', value=self.config.get('steps', 20))
+
+            gr.HTML('<p style="margin-bottom:0.8em"> It\'s recommended to keep the percentage at 20% (80% base steps, 20% refiner steps). Higher values may result in distortions. </p>')
             
         ui = [enable, checkpoint, steps]
         for elem in ui:
@@ -138,7 +140,7 @@ class Refiner(scripts.Script):
         self.uc_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_low_aesthetic_score).unsqueeze(0).to(devices.device))
         
         def denoiser_callback(params: script_callbacks.CFGDenoiserParams):
-            if params.sampling_step > params.total_sampling_steps - (steps + 2):
+            if params.sampling_step > params.total_sampling_steps * (1 - steps / 100) - 2:
                 params.text_cond['vector'] = torch.cat((params.text_cond['vector'][:, :2304], self.c_ae), 1)
                 params.text_uncond['vector'] = torch.cat((params.text_uncond['vector'][:, :2304], self.uc_ae), 1)
                 params.text_cond['crossattn'] = params.text_cond['crossattn'][:, :, -1280:]
