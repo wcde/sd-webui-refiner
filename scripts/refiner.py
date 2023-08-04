@@ -108,7 +108,7 @@ class Refiner(scripts.Script):
             enable = gr.Checkbox(label='Enable Refiner', value=False)
             with gr.Row():
                 checkpoint = gr.Dropdown(choices=['None', *sd_models.checkpoints_list.keys()], label='Model', value=self.config.get('checkpoint', 'None'))
-                steps = gr.Slider(minimum=0, maximum=50, step=1, label='Percent of Refiner steps to Base steps', value=self.config.get('steps', 20))
+                steps = gr.Slider(minimum=0, maximum=50, step=1, label='Percent of refiner steps from total step count', value=self.config.get('steps', 20))
 
             gr.HTML('<p style="margin-bottom:0.8em"> It\'s recommended to keep the percentage at 20% (80% base steps, 20% refiner steps). Higher values may result in distortions. </p>')
             
