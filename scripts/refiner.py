@@ -105,13 +105,12 @@ class Refiner(scripts.Script):
             enable = gr.Checkbox(label='Enable Refiner', value=False)
             with gr.Row():
                 checkpoint = gr.Dropdown(choices=['None', *sd_models.checkpoints_list.keys()], label='Model', value=self.config.get('checkpoint', 'None'))
-                steps = gr.Slider(minimum=0, maximum=35, step=1, label='Steps', value=self.config.get('steps', 10))
             
-        ui = [enable, checkpoint, steps]
+        ui = [enable, checkpoint]
         return ui
     
     
-    def process(self, p, enable, checkpoint, steps):
+    def process(self, p, enable, checkpoint):
         if not enable or checkpoint == 'None':
             script_callbacks.remove_current_script_callbacks()
             self.model = None
@@ -128,12 +127,11 @@ class Refiner(scripts.Script):
             self.callback_set = False
         self.config.enable = enable
         self.config.checkpoint = checkpoint
-        self.config.steps = steps
         self.c_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_high_aesthetic_score).unsqueeze(0).to(devices.device))
         self.uc_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_low_aesthetic_score).unsqueeze(0).to(devices.device))
         
         def denoiser_callback(params: script_callbacks.CFGDenoiserParams):
-            if params.sampling_step > params.total_sampling_steps - (steps + 2):
+            if params.sampling_step > params.total_sampling_steps 0.8 - 2:
                 params.text_cond['vector'] = torch.cat((params.text_cond['vector'][:, :2304], self.c_ae), 1)
                 params.text_uncond['vector'] = torch.cat((params.text_uncond['vector'][:, :2304], self.uc_ae), 1)
                 params.text_cond['crossattn'] = params.text_cond['crossattn'][:, :, -1280:]
