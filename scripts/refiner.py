@@ -108,17 +108,17 @@ class Refiner(scripts.Script):
             enable = gr.Checkbox(label='Enable Refiner', value=False)
             with gr.Row():
                 checkpoint = gr.Dropdown(choices=['None', *sd_models.checkpoints_list.keys()], label='Model', value=self.config.get('checkpoint', 'None'))
-                ratio = gr.Slider(minimum=0.5, maximum=1.0, step=0.05, label='Base to Refiner ratio', value=self.config.get('ratio', 0.8))
+                steps = gr.Slider(minimum=0, maximum=50, step=1, label='Percent of Refiner steps to Base steps', value=self.config.get('steps', 20))
 
-            gr.HTML('<p style="margin-bottom:0.8em"> Recommended to keep the ratio at 0.8 (80% base steps, 20% refiner steps). Lower values may result in distortions. </p>')
+            gr.HTML('<p style="margin-bottom:0.8em"> It\'s recommended to keep the percentage at 20% (80% base steps, 20% refiner steps). Higher values may result in distortions. </p>')
             
-        ui = [enable, checkpoint, ratio]
+        ui = [enable, checkpoint, steps]
         for elem in ui:
             setattr(elem, "do_not_save_to_config", True)
         return ui
     
     
-    def process(self, p, enable, checkpoint, ratio):
+    def process(self, p, enable, checkpoint, steps):
         if not enable or checkpoint == 'None':
             script_callbacks.remove_current_script_callbacks()
             self.model = None
@@ -135,12 +135,12 @@ class Refiner(scripts.Script):
             self.callback_set = False
         self.config.enable = enable
         self.config.checkpoint = checkpoint
-        self.config.ratio = ratio
+        self.config.steps = steps
         self.c_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_high_aesthetic_score).unsqueeze(0).to(devices.device))
         self.uc_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_low_aesthetic_score).unsqueeze(0).to(devices.device))
         
         def denoiser_callback(params: script_callbacks.CFGDenoiserParams):
-            if params.sampling_step > params.total_sampling_steps * ratio - 2:
+            if params.sampling_step > params.total_sampling_steps * (1 - steps / 100) - 2:
                 params.text_cond['vector'] = torch.cat((params.text_cond['vector'][:, :2304], self.c_ae), 1)
                 params.text_uncond['vector'] = torch.cat((params.text_uncond['vector'][:, :2304], self.uc_ae), 1)
                 params.text_cond['crossattn'] = params.text_cond['crossattn'][:, :, -1280:]
