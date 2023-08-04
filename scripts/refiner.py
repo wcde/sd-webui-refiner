@@ -4,6 +4,7 @@ from modules import scripts, script_callbacks, devices, sd_models, sd_models_con
 import gradio as gr
 import sgm.modules.diffusionmodules.denoiser_scaling
 import sgm.modules.diffusionmodules.discretizer
+from sgm.modules.encoders.modules import ConcatTimestepEmbedderND
 from safetensors.torch import load_file, load
 from sgm.modules.diffusionmodules.wrappers import OPENAIUNETWRAPPER
 from sgm.util import (
@@ -41,6 +42,9 @@ class Refiner(scripts.Script):
         self.base = None
         self.swapped = False
         self.model_name = ''
+        self.embedder = ConcatTimestepEmbedderND(256)
+        self.c_ae = None
+        self.uc_ae = None
         
     def title(self):
         return "Refiner"
@@ -54,7 +58,7 @@ class Refiner(scripts.Script):
         self.model = get_obj_from_str(OPENAIUNETWRAPPER)(
             self.model, compile_model=False
         ).eval()
-        self.model.to('cpu', torch.float16)
+        self.model.to('cpu', devices.dtype_unet)
         self.model.train = disabled_train
         dtype = next(self.model.diffusion_model.parameters()).dtype
         self.model.diffusion_model.dtype = dtype
@@ -120,9 +124,9 @@ class Refiner(scripts.Script):
         if self.model == None or self.model_name != checkpoint:
             if not self.load_model(checkpoint): return
         if self.base != None or self.swapped == True or self.callback_set == True:
-            self.model.to('cpu', torch.float16)
+            self.model.to('cpu', devices.dtype_unet)
             p.sd_model.model = self.base or p.sd_model.model
-            p.sd_model.model.to(devices.device, torch.float16)
+            p.sd_model.model.to(devices.device, devices.dtype_unet)
             script_callbacks.remove_current_script_callbacks()
             self.base = None
             self.swapped = False
@@ -130,25 +134,27 @@ class Refiner(scripts.Script):
         self.config.enable = enable
         self.config.checkpoint = checkpoint
         self.config.steps = steps
+        self.c_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_high_aesthetic_score).unsqueeze(0).to(devices.device))
+        self.uc_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_low_aesthetic_score).unsqueeze(0).to(devices.device))
         
         def denoiser_callback(params: script_callbacks.CFGDenoiserParams):
             if params.sampling_step > params.total_sampling_steps - (steps + 2):
-                params.text_cond['vector'] = params.text_cond['vector'][:, :2560]
-                params.text_uncond['vector'] = params.text_uncond['vector'][:, :2560]
+                params.text_cond['vector'] = torch.cat((params.text_cond['vector'][:, :2304], self.c_ae), 1)
+                params.text_uncond['vector'] = torch.cat((params.text_uncond['vector'][:, :2304], self.uc_ae), 1)
                 params.text_cond['crossattn'] = params.text_cond['crossattn'][:, :, -1280:]
                 params.text_uncond['crossattn'] = params.text_uncond['crossattn'][:, :, -1280:]
                 if not self.swapped:
                     for parameter in p.sd_model.model.parameters():
-                        parameter.to('cpu', torch.float16)
-                    self.base = p.sd_model.model.to('cpu', torch.float16)
+                        parameter.to('cpu', devices.dtype_unet)
+                    self.base = p.sd_model.model.to('cpu', devices.dtype_unet)
                     devices.torch_gc()
-                    p.sd_model.model = self.model.to(devices.device, torch.float16)
+                    p.sd_model.model = self.model.to(devices.device, devices.dtype_unet)
                     self.swapped = True
         
         def denoised_callback(params: script_callbacks.CFGDenoiserParams):
             if params.sampling_step == params.total_sampling_steps - 2:
-                self.model.to('cpu', torch.float16)
-                p.sd_model.model = self.base.to(devices.device, torch.float16)
+                self.model.to('cpu', devices.dtype_unet)
+                p.sd_model.model = self.base.to(devices.device, devices.dtype_unet)
                 self.base = None
                 self.swapped = False
                 self.callback_set = False
