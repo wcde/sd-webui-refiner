@@ -102,8 +102,8 @@ class Refiner(scripts.Script):
             if not self.load_model(checkpoint): return
         if self.base != None or self.swapped == True or self.callback_set == True:
             self.reset(p)
-        self.c_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_high_aesthetic_score).unsqueeze(0).to(devices.device))
-        self.uc_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_low_aesthetic_score).unsqueeze(0).to(devices.device))
+        self.c_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_high_aesthetic_score).unsqueeze(0).to(devices.device).repeat(p.batch_size, 1))
+        self.uc_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_low_aesthetic_score).unsqueeze(0).to(devices.device).repeat(p.batch_size, 1))
         
         def denoiser_callback(params: script_callbacks.CFGDenoiserParams):
             if params.sampling_step > params.total_sampling_steps * (1 - steps / 100) - 2:
