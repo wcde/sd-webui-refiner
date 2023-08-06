@@ -119,18 +119,22 @@ class Refiner(scripts.Script):
         
         def denoised_callback(params: script_callbacks.CFGDenoiserParams):
             if params.sampling_step == params.total_sampling_steps - 2:
-                self.reset(p)
+                self.reset(p, keep_hook=True)
         
         if not self.callback_set:
             script_callbacks.on_cfg_denoiser(denoiser_callback)
             script_callbacks.on_cfg_denoised(denoised_callback)
             self.callback_set = True
     
-    def reset(self, p):
+    def reset(self, p, keep_hook=False):
         self.model.to('cpu', devices.dtype_unet)
         p.sd_model.model = (self.base or p.sd_model.model).to(devices.device, devices.dtype_unet)
-        script_callbacks.remove_current_script_callbacks()
         self.base = None
         self.swapped = False
-        self.callback_set = False
+        if not keep_hook:
+            script_callbacks.remove_current_script_callbacks()
+            self.callback_set = False
+        
+    def postprocess(self, p, processed, *args):
+        self.reset(p)
         
