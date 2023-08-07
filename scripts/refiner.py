@@ -1,3 +1,4 @@
+from math import ceil
 import torch
 from modules import scripts, script_callbacks, devices, sd_models, sd_models_config, shared
 import gradio as gr
@@ -104,6 +105,8 @@ class Refiner(scripts.Script):
             if not self.load_model(checkpoint): return
         self.c_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_high_aesthetic_score).unsqueeze(0).to(devices.device).repeat(p.batch_size, 1))
         self.uc_ae = self.embedder(torch.tensor(shared.opts.sdxl_refiner_low_aesthetic_score).unsqueeze(0).to(devices.device).repeat(p.batch_size, 1))
+        p.extra_generation_params['Refiner model'] = checkpoint.rsplit('.', 1)[0]
+        p.extra_generation_params['Refiner steps'] = ceil((p.steps * (steps / 100)))
         
         def denoiser_callback(params: script_callbacks.CFGDenoiserParams):
             if params.sampling_step > params.total_sampling_steps * (1 - steps / 100) - 2:
