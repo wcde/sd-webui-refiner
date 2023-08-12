@@ -140,6 +140,7 @@ class Refiner(scripts.Script):
             script_callbacks.remove_current_script_callbacks()
             self.callback_set = False
         
-    def postprocess(self, p, processed, *args):
-        self.reset(p)
+    def postprocess(self, p, processed, enable, checkpoint, steps):
+        if not enable or checkpoint == 'None':
+            self.reset(p)
         
