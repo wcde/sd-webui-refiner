@@ -133,6 +133,7 @@ class Refiner(scripts.Script):
         if self.model is not None:
             self.model.to('cpu', devices.dtype_unet)
         p.sd_model.model = (self.base or p.sd_model.model).to(devices.device, devices.dtype_unet)
+        devices.torch_gc()
         self.base = None
         self.swapped = False
         if not keep_hook:
