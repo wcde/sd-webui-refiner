@@ -141,6 +141,6 @@ class Refiner(scripts.Script):
             self.callback_set = False
         
     def postprocess(self, p, processed, enable, checkpoint, steps):
-        if not enable or checkpoint == 'None':
+        if enable and checkpoint != 'None':
             self.reset(p)
         
